@@ -280,11 +280,15 @@ func (k *keyStore) readPC(p []byte) (int, error) {
 			copy(srcSubnet[:], bs[8:])
 			copy(dstSubnet[:], bs[24:])
 			if dstAddr != k.address && dstSubnet != k.subnet {
-				continue // bad local address/subnet
+				if dstAddr[0]&0xfe == 0x02 {
+					continue // bad local address/subnet
+				}
 			}
 			info := k.update(ed25519.PublicKey(from.(iwt.Addr)))
 			if srcAddr != info.address && srcSubnet != info.subnet {
-				continue // bad remote address/subnet
+				if srcAddr[0]&0xfe == 0x02 {
+					continue // bad remote address/subnet
+				}
 			}
 		} 
 
