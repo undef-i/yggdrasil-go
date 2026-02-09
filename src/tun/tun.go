@@ -28,6 +28,7 @@ type ReadWriteCloser interface {
 	Subnet() address.Subnet
 	MaxMTU() uint64
 	SetMTU(uint64)
+	SendToAddress(address.Address, []byte) (int, error)
 }
 
 // TunAdapter represents a running TUN interface and extends the
@@ -50,6 +51,7 @@ type TunAdapter struct {
 		mtu  InterfaceMTU
 	}
 	ch chan []byte
+	table *Table
 }
 
 // Gets the maximum supported MTU for the platform based on the defaults in
@@ -102,8 +104,9 @@ func MaximumMTU() uint64 {
 // the Yggdrasil core before this point and it must not be in use elsewhere.
 func New(rwc ReadWriteCloser, log core.Logger, opts ...SetupOption) (*TunAdapter, error) {
 	tun := &TunAdapter{
-		rwc: rwc,
-		log: log,
+		rwc:   rwc,
+		log:   log,
+		table: NewTable(log),
 	}
 	for _, opt := range opts {
 		tun._applyOption(opt)
@@ -147,6 +150,7 @@ func (tun *TunAdapter) _start() error {
 		tun.log.Warnf("Warning: Interface MTU %d automatically adjusted to %d (supported range is 1280-%d)", tun.config.mtu, tun.MTU(), MaximumMTU())
 	}
 	tun.rwc.SetMTU(tun.MTU())
+	tun.table.Start()
 	tun.isOpen = true
 	tun.isEnabled = true
 	tun.ch = make(chan []byte, tun.iface.BatchSize())

@@ -240,44 +240,62 @@ func (k *keyStore) readPC(p []byte) (int, error) {
 		if len(bs) == 0 {
 			continue
 		}
-		if bs[0]&0xf0 != 0x60 {
-			continue // not IPv6
+		isIPv6 := (bs[0]&0xf0 == 0x60)
+		isIPv4 := (bs[0]&0xf0 == 0x40)
+		if !isIPv6 && !isIPv4 {
+			continue // not IPv6 or IPv4
 		}
-		if len(bs) < 40 {
+		if isIPv6 && len(bs) < 40 {
 			continue
 		}
+		if isIPv4 && len(bs) < 20 {
+			continue
+		}
+		
 		k.mutex.Lock()
 		mtu := int(k.mtu)
 		k.mutex.Unlock()
+
 		if len(bs) > mtu {
-			// Using bs would make it leak off the stack, so copy to buf
-			buf := make([]byte, 512)
-			cn := copy(buf, bs)
-			ptb := &icmp.PacketTooBig{
-				MTU:  mtu,
-				Data: buf[:cn],
-			}
-			if packet, err := CreateICMPv6(buf[8:24], buf[24:40], ipv6.ICMPTypePacketTooBig, 0, ptb); err == nil {
-				_, _ = k.writePC(packet)
+			if isIPv6 {
+				// Using bs would make it leak off the stack, so copy to buf
+				buf := make([]byte, 512)
+				cn := copy(buf, bs)
+				ptb := &icmp.PacketTooBig{
+					MTU:  mtu,
+					Data: buf[:cn],
+				}
+				if packet, err := CreateICMPv6(buf[8:24], buf[24:40], ipv6.ICMPTypePacketTooBig, 0, ptb); err == nil {
+					_, _ = k.writePC(packet)
+				}
 			}
 			continue
 		}
-		var srcAddr, dstAddr address.Address
-		var srcSubnet, dstSubnet address.Subnet
-		copy(srcAddr[:], bs[8:])
-		copy(dstAddr[:], bs[24:])
-		copy(srcSubnet[:], bs[8:])
-		copy(dstSubnet[:], bs[24:])
-		if dstAddr != k.address && dstSubnet != k.subnet {
-			continue // bad local address/subnet
-		}
-		info := k.update(ed25519.PublicKey(from.(iwt.Addr)))
-		if srcAddr != info.address && srcSubnet != info.subnet {
-			continue // bad remote address/subnet
-		}
+
+		if isIPv6 {
+			var srcAddr, dstAddr address.Address
+			var srcSubnet, dstSubnet address.Subnet
+			copy(srcAddr[:], bs[8:])
+			copy(dstAddr[:], bs[24:])
+			copy(srcSubnet[:], bs[8:])
+			copy(dstSubnet[:], bs[24:])
+			if dstAddr != k.address && dstSubnet != k.subnet {
+				continue // bad local address/subnet
+			}
+			info := k.update(ed25519.PublicKey(from.(iwt.Addr)))
+			if srcAddr != info.address && srcSubnet != info.subnet {
+				continue // bad remote address/subnet
+			}
+		} 
+
 		n = copy(p, bs)
 		return n, nil
 	}
+}
+
+func (k *keyStore) SendToAddress(addr address.Address, bs []byte) (int, error) {
+	k.sendToAddress(addr, bs)
+	return len(bs), nil
 }
 
 func (k *keyStore) writePC(bs []byte) (int, error) {

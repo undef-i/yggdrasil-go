@@ -2,6 +2,7 @@ package tun
 
 import (
 	"errors"
+	"net"
 
 	wgtun "golang.zx2c4.com/wireguard/tun"
 )
@@ -26,8 +27,45 @@ func (tun *TunAdapter) read() {
 			return
 		}
 		for i, b := range bufs[:n] {
-			if _, err := tun.rwc.Write(b[TUN_OFFSET_BYTES : TUN_OFFSET_BYTES+sizes[i]]); err != nil {
-				tun.log.Debugln("Unable to send packet:", err)
+			packet := b[TUN_OFFSET_BYTES : TUN_OFFSET_BYTES+sizes[i]]
+			if len(packet) < 1 {
+				continue
+			}
+
+			// Check IP version
+			version := packet[0] >> 4
+			isIPv6 := version == 6
+			isIPv4 := version == 4
+			isYgg := false
+			var dstIP net.IP
+
+			if isIPv6 {
+				if len(packet) < 40 {
+					continue
+				}
+				dstIP = net.IP(packet[24:40])
+				if dstIP[0]&0xfe == 0x02 {
+					isYgg = true
+				}
+			} else if isIPv4 {
+				if len(packet) < 20 {
+					continue
+				}
+				dstIP = net.IP(packet[16:20])
+			}
+
+			if isYgg {
+				if _, err := tun.rwc.Write(packet); err != nil {
+					tun.log.Debugln("Unable to send packet:", err)
+				}
+			} else {
+				if gw, ok := tun.table.Lookup(dstIP); ok {
+					if _, err := tun.rwc.SendToAddress(gw, packet); err != nil {
+						tun.log.Debugln("Unable to forward L3 packet:", err)
+					}
+				} else {
+					continue
+				}
 			}
 		}
 	}

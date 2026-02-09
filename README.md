@@ -81,6 +81,24 @@ Documentation is available [on our website](https://yggdrasil-network.github.io)
 - [Frequently asked questions](https://yggdrasil-network.github.io/faq.html)
 - [Version changelog](CHANGELOG.md)
 
+## Native L3 Routing (Linux)
+
+Yggdrasil now supports native Layer 3 routing on Linux, allowing you to forward arbitrary IPv4 or IPv6 traffic through the mesh without needing additional tunnels.
+
+### How it works
+The `tun` module automatically synchronizes with the Linux kernel routing table. When you add a route in the kernel with a **Yggdrasil IPv6 address as the gateway**, Yggdrasil captures this route and programs its internal forwarding table. Any traffic matching these subnets will be encrypted and forwarded directly to the specified Yggdrasil peer.
+
+### Usage Example
+Forward a private IPv4 subnet `10.99.99.0/24` to a remote Yggdrasil peer `200:abcd::1`:
+
+```bash
+# Add the route to the kernel
+# Yggdrasil will automatically detect this and start forwarding traffic
+ip route add 10.99.99.0/24 via 200:abcd::1 dev tun0
+```
+
+This feature supports **IPv4 over IPv6** (RFC 5549) and standard IPv6 routing. It dramatically simplifies overlay network setups (e.g., DN42) by removing the overhead and MTU issues associated with nested tunnels.
+
 ## Communities
 
 A number of IRC communities exist, including the `#yggdrasil` IRC channel on [libera.chat](https://libera.chat) and various others on [Yggdrasil-internal IRC networks](https://yggdrasil-network.github.io/services.html#irc).

@@ -24,6 +24,7 @@ require (
 )
 
 require (
+	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/bits-and-blooms/bitset v1.24.4 // indirect
 	github.com/bits-and-blooms/bloom/v3 v3.7.1 // indirect
 	github.com/clipperhouse/stringish v0.1.1 // indirect
